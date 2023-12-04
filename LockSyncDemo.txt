@@ -1,0 +1,6 @@
+先javac命令将java文件编译成class文件
+在javap -c 命令将class文件反编译 会看到汇编代码 再加上-v可以看到更多的附加信息(行号、本地变量表)
+ 
+同步代码块  汇编中使用了 monitorenter和monitorexit 
+同步实例方法  汇编中添加了ACC_SYNCHRONIZED的flags作为标识
+同步静态方法  汇编中添加了ACC_SYNCHRONIZED和ACC_STATIC的flags作为标识
