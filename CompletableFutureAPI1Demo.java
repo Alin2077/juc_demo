@@ -9,7 +9,6 @@ public class CompletableFutureAPI1Demo {
                     try {
                         TimeUnit.SECONDS.sleep(1);
                     } catch (InterruptedException e) {
-                        // TODO Auto-generated catch block
                         e.printStackTrace();
                     }
                     return "over";
@@ -20,7 +19,6 @@ public class CompletableFutureAPI1Demo {
         // System.out.println(supplyAsync.join()); //不会抛出异常,作用与get一样
         // String now = supplyAsync.getNow("xxx");  //调用getNow时,如果计算完成了,则返回结果,如果没有玩成则返回传入的参数
         // boolean complete = supplyAsync.complete("xxx");  //调用时如果计算未完成则将传入的参数作为结果,此时用join或get方法会获取到传入的参数
-
         
     }
 }
