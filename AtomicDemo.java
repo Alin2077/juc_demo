@@ -34,10 +34,6 @@ import java.util.concurrent.atomic.LongAdder;
   * 在LongAdder类中真正实现累加的是-------------longAccumulate()方法---------
   */
 
-  /**
-   * longAccumulate()方法详解
-   */
-
 class MyNumberR{
     AtomicInteger atomicInteger = new AtomicInteger();
 
