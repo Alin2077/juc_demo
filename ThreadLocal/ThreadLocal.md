@@ -91,3 +91,12 @@ void createMap(Thread t, T firstValue) {
         1. 第一层包装是使用WeakReference<ThreadLocal<?>>将ThreadLocal对象变成一个<font color='red'>弱引用对象</font>
         2. 第二层包装是定义了一个专门的类Entry类扩展WeakReference<ThreadLocal<?>>
     * 强引用、弱引用、软引用、虚引用相关知识 [点此跳转](./reference.md)
+## 为什么要用弱引用？不用如何？
+* 如果key是强引用，会导致key指向的ThreadLocal对象及v指向的对象不能被gc回收
+* key为弱引用时，线程Thread中对ThreadLocal的强引用被销毁时，ThreadLocalMap中的弱引用很快就很被回收，key由ThreadLocal对象变成null
+* 每次调用set()、get()、remove()方法时，都会清理ThreadLocalMap中key为null的值
+## 总结
+* ThreadLocal是一个壳子。真正的存储结构时ThreadLocal里有ThreadLocalMap这么一个内部类，每个Thread对象维护着一个ThreadLocalMap的引用，ThreadLocalMap时ThreadLocal的内部类，用Entry来进行存储。
+1. 调用ThreadLocal的set()方法时，实际上就是往ThreadLocalMap设置值，key是ThreadLocal对象，值value是传递进来的对象
+2. 调用ThreadLocal的get()方法时，实际上就是从ThreadLocalMap获取值，key是ThreadLocal对象
+* ThreadLocal本身并不存储值，它只是自己作为一个key来让线程从ThreadLocalMap获取value，正是因为这个原理，所以ThreadLocal能够实现“数据隔离”,获取当前线程的局部变量值，不受其他线程影响
