@@ -1,3 +1,4 @@
+package CAS;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class CASDemo {

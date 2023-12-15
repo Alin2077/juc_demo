@@ -1,3 +1,4 @@
+package Interrupt;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -6,7 +7,7 @@ import java.util.concurrent.TimeUnit;
  * 当异常发生时 会将中断标志位清除
  */
 
-public class Inter入盆他Demo {
+public class InterruptDemo3 {
  
     public static void main(String[] args) {
         Thread t1 = new Thread(() -> {

@@ -1,1 +1,0 @@
-## Object obj = new Object()的理解？
