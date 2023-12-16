@@ -28,7 +28,7 @@
 <tr>
 <td>无锁</td>
 <td>unused</td>
-<td>hashCode</td>
+<td>hashCode（如果有调用才会生成）</td>
 <td></td>
 <td></td>
 <td>0</td>

@@ -3,7 +3,7 @@ import java.util.concurrent.locks.ReentrantLock;
 class Ticket{
 
     private int number = 50;
-    ReentrantLock lock = new ReentrantLock(true);
+    ReentrantLock lock = new ReentrantLock();
 
     public void sale(){
         lock.lock();
