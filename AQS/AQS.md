@@ -194,5 +194,198 @@
         }
         ```
         * 公平锁：公平锁讲究先来后到，线程在获取锁时，如果这个锁的等待队列中已经有线程在等待，那么当前线程会进入等待队列中。
-        * 非公平锁：不管是否有等待对俩，如果可以获取锁，则立刻占用锁对象。也就是说队列的第一个排队线程苏醒后，不一定就是排头的这个线程获得锁，它还是需要参加竞争锁（存在线程竞争的情况下），后来的线程可能不讲武德插队抢锁了。
+        * 非公平锁：不管是否有等待对俩，如果可以获取锁则立刻占用锁对象。也就是说队列的第一个排队线程苏醒后，不一定就是排头的这个线程获得锁，它还是需要参加竞争锁（存在线程竞争的情况下），后来的线程可能不讲武德插队抢锁了。
+2. 非公平锁详解
+    * lock() --> acquire(1) -->  !tryAcquire(1) && acquireQueued(addWaiter(Node.EXCLSIVE),1) --> selfInterrupt()
+    * tryAcquire(1)：交由子类FairSync实现
+        ```java
+        final boolean nonfairTryAcquire(int acquires) {
+            final Thread current = Thread.currentThread();
+            int c = getState();
+            if (c == 0) {//如果资源被释放，则直接CAS尝试抢占资源
+                if (compareAndSetState(0, acquires)) {
+                    setExclusiveOwnerThread(current);
+                    return true;
+                }
+            }
+            else if (current == getExclusiveOwnerThread()) {//如果是当前线程持有锁
+                int nextc = c + acquires;
+                if (nextc < 0) // overflow
+                    throw new Error("Maximum lock count exceeded");
+                setState(nextc);
+                return true;
+            }
+            return false;
+        }
+        ```
+    * addWaiter(Node.EXCLSIVE)：
+        ```java
+        private Node addWaiter(Node mode) {
+            Node node = new Node(Thread.currentThread(), mode);//新增节点
+            Node pred = tail;   //获取当前AQS队列的尾节点
+            if (pred != null) { //若当前AQS队列的尾节点不为null，即AQS队列中有线程在排队
+                node.prev = pred; //将新增节点的prev属性存储之前的尾节点
+                if (compareAndSetTail(pred, node)) {
+                    pred.next = node;
+                    return node;
+                }
+            }
+            enq(node);  //若AQS队列中没有线程则执行enq()方法
+            return node;
+        }
+        ```
+        调用enq()方法进行入队操作
+        ```java
+        private Node enq(final Node node) {
+            for (;;) {
+                Node t = tail;  //获取尾节点
+                if (t == null) { // 尾节点为null，则必须new节点
+                    if (compareAndSetHead(new Node()))
+                        tail = head; //AQS中的tail属性存储 new 出的Node节点，这个 new 出的节点被成为哨兵节点，作用就是占位，因为new出的Node默认的waitStatus为0
+                } else { //尾节点不为null
+                    node.prev = t;//将新增节点的prev属性存储尾节点的属性
+                    if (compareAndSetTail(t, node)) {//CAS修改AQS的tail属性，改为新增节点
+                        t.next = node;  //如果修改AQS的tail属性成功，则将之前尾节点的next属性存储新增节点
+                        return t;
+                    }
+                }
+            }
+        }
+        ```
+    * acquireQueued(addWaiter(Node.EXCLSIVE),1)：
+        ```java
+        final boolean acquireQueued(final Node node, int arg) {// 接收 新增节点 占用状态 两个参数
+            boolean failed = true;
+            try {
+                boolean interrupted = false;  //中断位，默认不中断
+                for (;;) {
+                    final Node p = node.predecessor(); //获取新增节点的前置节点，成为P
+                    if (p == head && tryAcquire(arg)) { //P是头节点 并且 再尝试抢资源成功进入
+                        setHead(node);
+                        p.next = null; // help GC
+                        failed = false;
+                        return interrupted;
+                    }
+                    //P不是头节点或者再尝试抢夺资源失败则往下走
+                    if (shouldParkAfterFailedAcquire(p, node) &&
+                        parkAndCheckInterrupt())
+                        interrupted = true;
+                }
+            } finally {
+                if (failed)  //异常情况退出队列
+                    cancelAcquire(node);
+            }
+        }
+        ```
+        ```java
+        private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
+            int ws = pred.waitStatus; //获取到前置节点P的waitStatus
+            if (ws == Node.SIGNAL)// 判断前置节点P的waitStatus是否等于-1
+                return true;
+
+            if (ws > 0) {
+                
+                do {
+                    node.prev = pred = pred.prev;
+                } while (pred.waitStatus > 0);
+                pred.next = node;
+            } else {
+                //前置节点的waitStatus为0时，将waitSatus改成 -1
+                compareAndSetWaitStatus(pred, ws, Node.SIGNAL);
+            }
+            return false;
+        }
+        ```
+        ```java
+        private final boolean parkAndCheckInterrupt() {
+            LockSupport.park(this);  //中断当前线程，实现在队列中停止
+            return Thread.interrupted();
+        }
+        ```
+        ```java
+        //出现异常情况，退出AQS
+        private void cancelAcquire(Node node) { //传入的是当前新增的节点
+            
+            if (node == null)
+                return;
+
+            node.thread = null;  //将节点的thread清空
+
+            Node pred = node.prev;  //获取节点的上一个节点
+            while (pred.waitStatus > 0) //只有上一个节点也被取消了，才会 >0
+                node.prev = pred = pred.prev;
+
+            Node predNext = pred.next;  //获取到上一个节点的下一个节点
+
+            node.waitStatus = Node.CANCELLED;  //将当前节点的waitStatus改为1
+
+            
+            if (node == tail && compareAndSetTail(node, pred)) {
+                //如果要退出的是尾节点，那么需要把前面的节点设置为尾节点
+                compareAndSetNext(pred, predNext, null);
+            } else {
+
+                int ws;
+                if (pred != head &&  //上一个节点不为 头节点
+                    ((ws = pred.waitStatus) == Node.SIGNAL || // 上一个节点的waitStatus是-1或能改成-1
+                    (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) &&
+                    pred.thread != null) {
+                    Node next = node.next;  //获取到当前节点的下一节点
+                    if (next != null && next.waitStatus <= 0)
+                        compareAndSetNext(pred, predNext, next);
+                } else {
+                    unparkSuccessor(node);
+                }
+
+                node.next = node;  //当前节点的node指向自己，为了GC
+            }
+        }
+        ```
+    * unlock() --> sync.release(1) --> tryRelease(arg) --> unparkSuccessor
+    * sync.release(1)
+        ```java
+        public final boolean release(int arg) {
+            if (tryRelease(arg)) {  //解锁成功则进入循环体
+                Node h = head;  //获取头节点
+                if (h != null && h.waitStatus != 0)
+                    unparkSuccessor(h);
+                return true;
+            }
+            return false;
+        }
+        ```
+    * tryRelease()
+        ```java
+        protected final boolean tryRelease(int releases) {
+            int c = getState() - releases;
+            if (Thread.currentThread() != getExclusiveOwnerThread())
+                throw new IllegalMonitorStateException();
+            boolean free = false;
+            if (c == 0) {
+                free = true;
+                setExclusiveOwnerThread(null);
+            }
+            setState(c);
+            return free;
+        }
+        ```
+    * unparkSuccessor()
+        ```java
+        private void unparkSuccessor(Node node) { //node为AQS队列中的头节点
+            
+            int ws = node.waitStatus;  
+            if (ws < 0)
+                compareAndSetWaitStatus(node, ws, 0); //重新将头节点的waitStatus改为0
+
+            Node s = node.next;  //获取AQS的第二个节点
+            if (s == null || s.waitStatus > 0) {
+                s = null;
+                for (Node t = tail; t != null && t != node; t = t.prev)
+                    if (t.waitStatus <= 0)
+                        s = t;
+            }
+            if (s != null)
+                LockSupport.unpark(s.thread);
+        }
+        ```
 
